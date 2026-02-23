@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="apple-touch-icon" href="/static/icon.png">
+    <title>Fridgic</title>
+    <style>
+        :root {
+            --bg: #f5f5f5; --card: #fff; --text: #051C2C; --text-muted: #666;
+            --border: #ddd; --header-bg: #051C2C;
+            --expired-bg: #ffebee; --expired-border: #f44336;
+            --today-bg: #fff3e0; --today-border: #ff5722;
+            --soon-bg: #fffde7; --soon-border: #FFC107;
+            --ok-bg: #e8f5e9; --ok-border: #4CAF50;
+            --no-date-bg: #fafafa; --no-date-border: #9e9e9e;
+        }
+        .dark {
+            --bg: #0a0f1a; --card: #051C2C; --text: #eee; --text-muted: #aaa;
+            --border: #1a3a5c; --header-bg: #051C2C;
+            --expired-bg: #2d1f1f; --today-bg: #2d261f; --soon-bg: #2d2a1f;
+            --ok-bg: #1f2d2a; --no-date-bg: #1a1a2e;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 100px; transition: all 0.3s; }
+        .header { background: var(--header-bg); color: white; padding: 15px 20px; position: sticky; top: 0; z-index: 100; display: flex; justify-content: space-between; align-items: center; }
+        .header h1 { font-size: 18px; font-weight: 300; letter-spacing: 4px; }
+        .header-actions { display: flex; gap: 8px; }
+        .icon-btn { background: rgba(255,255,255,0.15); border: none; color: white; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; font-size: 16px; }
+        .search-bar { padding: 10px 15px; background: var(--card); border-bottom: 1px solid var(--border); position: sticky; top: 56px; z-index: 99; }
+        .search-bar input { width: 100%; padding: 10px 15px; border: 1px solid var(--border); border-radius: 20px; font-size: 14px; background: var(--bg); color: var(--text); }
+        .filter-tabs { display: flex; gap: 8px; padding: 10px 15px; overflow-x: auto; background: var(--card); border-bottom: 1px solid var(--border); }
+        .filter-tab { padding: 6px 14px; border-radius: 15px; border: 1px solid var(--border); background: var(--bg); font-size: 12px; white-space: nowrap; cursor: pointer; color: var(--text); }
+        .filter-tab.active { background: var(--header-bg); color: white; border-color: var(--header-bg); }
+        .filter-tab .count { background: rgba(0,0,0,0.15); padding: 1px 6px; border-radius: 10px; margin-left: 5px; font-size: 11px; }
+        .buttons { display: flex; gap: 6px; padding: 12px 15px; justify-content: center; background: var(--card); }
+        .btn { padding: 10px 12px; border: none; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+        .btn-scan { background: #0a2540; color: white; }
+        .btn-receipt { background: #1a3a5c; color: white; }
+        .btn-add { background: #2a4a6c; color: white; }
+        .btn-primary { background: var(--header-bg); color: white; }
+        .btn-red { background: #f44336; color: white; }
+        .btn-gray { background: #9e9e9e; color: white; }
+        .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+        .scan-options { display: none; flex-direction: column; gap: 8px; padding: 10px 15px; background: var(--card); border-bottom: 1px solid var(--border); }
+        .scan-options.active { display: flex; }
+        .scan-option { padding: 12px 16px; background: var(--bg); border-radius: 10px; display: flex; align-items: center; gap: 12px; cursor: pointer; }
+        .scan-option:active { opacity: 0.7; }
+        .multi-select-bar { display: none; padding: 12px 15px; background: var(--header-bg); color: white; justify-content: space-between; align-items: center; position: sticky; top: 56px; z-index: 98; }
+        .multi-select-bar.active { display: flex; }
+        .multi-select-bar .count { font-weight: 600; }
+        .group-header { padding: 8px 15px; font-size: 12px; font-weight: 600; color: var(--text-muted); background: var(--bg); text-transform: uppercase; letter-spacing: 0.5px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+        .group-header .toggle { font-size: 14px; }
+        .items-list { padding: 0 15px; }
+        .item-wrapper { position: relative; overflow: hidden; margin-bottom: 8px; border-radius: 10px; }
+        .item-delete { position: absolute; right: 0; top: 0; bottom: 0; width: 80px; background: #f44336; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; }
+        .item-delete.confirm { background: #b71c1c; }
+        .item { background: var(--card); border-radius: 10px; padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; position: relative; transition: transform 0.2s; touch-action: pan-y; cursor: pointer; }
+        .item.swiped { transform: translateX(-80px); }
+        .item.expired { border-left: 4px solid var(--expired-border); background: var(--expired-bg); }
+        .item.today { border-left: 4px solid var(--today-border); background: var(--today-bg); }
+        .item.soon { border-left: 4px solid var(--soon-border); background: var(--soon-bg); }
+        .item.ok { border-left: 4px solid var(--ok-border); background: var(--ok-bg); }
+        .item.no_date { border-left: 4px solid var(--no-date-border); background: var(--no-date-bg); }
+        .item.selected { box-shadow: inset 0 0 0 2px var(--header-bg); }
+        .item-checkbox { width: 22px; height: 22px; border: 2px solid var(--border); border-radius: 50%; margin-right: 12px; display: none; align-items: center; justify-content: center; flex-shrink: 0; }
+        .multi-select-mode .item-checkbox { display: flex; }
+        .item-checkbox.checked { background: var(--header-bg); border-color: var(--header-bg); }
+        .item-checkbox.checked::after { content: "✓"; color: white; font-size: 12px; }
+        .item-info { flex: 1; }
+        .item-info h3 { font-size: 15px; margin-bottom: 3px; text-transform: capitalize; }
+        .item-info p { font-size: 12px; color: var(--text-muted); }
+        .quantity-badge { background: rgba(0,0,0,0.1); padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 6px; }
+        .item-status { text-align: right; font-size: 11px; color: var(--text-muted); }
+        .item-status .days { font-size: 16px; font-weight: bold; }
+        .item-status.expired .days { color: #f44336; }
+        .item-status.today .days { color: #ff5722; }
+        .item-status.soon .days { color: #FF9800; }
+        .item-status.ok .days { color: #4CAF50; }
+        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 200; align-items: center; justify-content: center; }
+        .modal.active { display: flex; }
+        .modal-content { background: var(--card); padding: 20px; border-radius: 15px; width: 90%; max-width: 350px; max-height: 80vh; overflow-y: auto; }
+        .modal-content h2 { margin-bottom: 15px; text-align: center; color: var(--text); font-weight: 500; }
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 13px; color: var(--text); }
+        .form-group input { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 16px; background: var(--bg); color: var(--text); }
+        .modal-buttons { display: flex; gap: 10px; margin-top: 15px; }
+        .modal-buttons .btn { flex: 1; justify-content: center; }
+        .quick-dates { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+        .quick-date { padding: 5px 10px; border: 1px solid var(--border); border-radius: 15px; font-size: 12px; cursor: pointer; background: var(--bg); color: var(--text); }
+        .quick-date:hover { background: var(--header-bg); color: white; }
+        .shelf-life-list { max-height: 50vh; overflow-y: auto; }
+        .shelf-life-item-wrapper { position: relative; overflow: hidden; margin-bottom: 6px; border-radius: 8px; }
+        .shelf-life-item-delete { position: absolute; right: 0; top: 0; bottom: 0; width: 70px; background: #f44336; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; }
+        .shelf-life-item-delete.confirm { background: #b71c1c; }
+        .shelf-life-item { display: flex; justify-content: space-between; padding: 12px; background: var(--bg); cursor: pointer; align-items: center; transition: transform 0.2s; position: relative; }
+        .shelf-life-item.swiped { transform: translateX(-70px); }
+        .shelf-life-item:active { opacity: 0.7; }
+        .shelf-life-item .checkbox { width: 20px; height: 20px; border: 2px solid var(--border); border-radius: 50%; margin-right: 10px; display: none; align-items: center; justify-content: center; flex-shrink: 0; }
+        .shelf-life-select-mode .shelf-life-item .checkbox { display: flex; }
+        .shelf-life-item .checkbox.checked { background: var(--header-bg); border-color: var(--header-bg); }
+        .shelf-life-item .checkbox.checked::after { content: "✓"; color: white; font-size: 11px; }
+        .shelf-life-item span:first-child { text-transform: capitalize; flex: 1; }
+        .shelf-life-item .days-badge { background: var(--header-bg); color: white; padding: 4px 10px; border-radius: 12px; font-size: 12px; }
+        .shelf-life-item .edit-hint { font-size: 11px; color: var(--text-muted); margin-left: 8px; }
+        .shelf-life-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .shelf-life-header h2 { margin: 0; }
+        .empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); }
+        .empty-state .icon { font-size: 50px; margin-bottom: 10px; }
+        .alert { background: var(--today-bg); border: 1px solid var(--today-border); border-radius: 10px; padding: 12px; margin: 10px 15px; }
+        .alert h3 { color: #e65100; margin-bottom: 8px; font-size: 14px; }
+        .alert ul { margin-left: 18px; font-size: 13px; }
+        .alert-toggle { background: none; border: none; color: #e65100; cursor: pointer; font-size: 12px; float: right; }
+        .loading { text-align: center; padding: 30px; color: var(--text-muted); }
+        .hidden { display: none !important; }
+        input[type="file"] { display: none; }
+        .swipe-hint { font-size: 10px; color: var(--text-muted); text-align: center; padding: 5px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>FRIDGIC</h1>
+        <div class="header-actions">
+            <button class="icon-btn" onclick="toggleMultiSelect()" id="select-btn" title="Select Multiple">☑️</button>
+            <button class="icon-btn" onclick="showShelfLifeList()" title="Shelf Life Data">📋</button>
+            <button class="icon-btn" onclick="showSettings()" title="Settings">⚙️</button>
+        </div>
+    </div>
+
+    <div class="search-bar">
+        <input type="text" id="search-input" placeholder="🔍 Search items..." oninput="filterItems()">
+    </div>
+
+    <div class="filter-tabs" id="filter-tabs"></div>
+
+    <div class="multi-select-bar" id="multi-select-bar">
+        <span><span class="count" id="selected-count">0</span> selected</span>
+        <div style="display:flex;gap:8px;">
+            <button class="btn btn-outline" style="color:white;border-color:white;" onclick="selectAll()">Select All</button>
+            <button class="btn btn-red" onclick="deleteSelected()">🗑️ Delete</button>
+        </div>
+    </div>
+
+    <div id="alert-container"></div>
+
+    <div class="buttons">
+        <button class="btn btn-scan" onclick="document.getElementById('fridge-input').click()">📷 Scan Fridge</button>
+        <button class="btn btn-receipt" onclick="toggleScanOptions()">🧾 Receipt</button>
+        <button class="btn btn-add" onclick="showAddModal()">➕ Add</button>
+    </div>
+
+    <div class="scan-options" id="scan-options">
+        <div class="scan-option" onclick="document.getElementById('receipt-camera').click()">
+            <span style="font-size:24px;">📸</span>
+            <div>
+                <strong>Take Photo</strong>
+                <p style="font-size:12px;color:var(--text-muted);margin:0;">Use camera to scan receipt</p>
+            </div>
+        </div>
+        <div class="scan-option" onclick="document.getElementById('receipt-album').click()">
+            <span style="font-size:24px;">🖼️</span>
+            <div>
+                <strong>Choose from Album</strong>
+                <p style="font-size:12px;color:var(--text-muted);margin:0;">Select receipt photo from gallery</p>
+            </div>
+        </div>
+    </div>
+
+    <input type="file" id="fridge-input" accept="image/*" capture="environment" onchange="scanImage(this, 'fridge')">
+    <input type="file" id="receipt-camera" accept="image/*" capture="environment" onchange="scanImage(this, 'receipt')">
+    <input type="file" id="receipt-album" accept="image/*" onchange="scanImage(this, 'receipt')">
+
+    <div id="items-container"></div>
+    
+    <p class="swipe-hint" id="swipe-hint">👆 Swipe left on item to reveal delete, swipe again to confirm</p>
+
+    <!-- Add/Edit Modal -->
+    <div id="item-modal" class="modal">
+        <div class="modal-content">
+            <h2 id="modal-title">Add Item</h2>
+            <div class="form-group">
+                <label>Item Name</label>
+                <input type="text" id="item-name" placeholder="e.g., Milk">
+            </div>
+            <div class="form-group">
+                <label>Quantity</label>
+                <input type="number" id="item-quantity" value="1" min="1">
+            </div>
+            <div class="form-group">
+                <label>Expiry Date</label>
+                <input type="date" id="item-expiry">
+                <div class="quick-dates">
+                    <span class="quick-date" onclick="setQuickDate(1)">Tomorrow</span>
+                    <span class="quick-date" onclick="setQuickDate(3)">3 days</span>
+                    <span class="quick-date" onclick="setQuickDate(7)">1 week</span>
+                    <span class="quick-date" onclick="setQuickDate(14)">2 weeks</span>
+                    <span class="quick-date" onclick="setQuickDate(30)">1 month</span>
+                </div>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-gray" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-red hidden" id="delete-btn" onclick="deleteCurrentItem()">🗑️</button>
+                <button class="btn btn-primary" onclick="saveItem()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Shelf Life Modal -->
+    <div id="shelf-life-modal" class="modal">
+        <div class="modal-content">
+            <h2>New Item: <span id="shelf-life-item"></span></h2>
+            <p style="margin-bottom: 12px; color: var(--text-muted); font-size: 13px;">How many days does this typically last?</p>
+            <div class="form-group">
+                <input type="number" id="shelf-life-days" min="1" placeholder="Days">
+                <div class="quick-dates">
+                    <span class="quick-date" onclick="document.getElementById('shelf-life-days').value=3">3 days</span>
+                    <span class="quick-date" onclick="document.getElementById('shelf-life-days').value=7">1 week</span>
+                    <span class="quick-date" onclick="document.getElementById('shelf-life-days').value=14">2 weeks</span>
+                </div>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-primary" onclick="saveShelfLife()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <h2>⚙️ Settings</h2>
+            <div class="form-group">
+                <label style="display: flex; justify-content: space-between; align-items: center;">
+                    Dark Mode
+                    <input type="checkbox" id="dark-mode-toggle" onchange="toggleDarkMode()" style="width: auto;">
+                </label>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-primary" onclick="closeSettings()">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Shelf Life List Modal -->
+    <div id="shelf-life-list-modal" class="modal">
+        <div class="modal-content">
+            <div class="shelf-life-header">
+                <h2>📋 Shelf Life</h2>
+                <button class="btn btn-gray" style="padding:6px 12px;font-size:11px;" id="shelf-life-select-btn" onclick="toggleShelfLifeSelect()">☑️ Select</button>
+            </div>
+            <p style="margin-bottom: 12px; color: var(--text-muted); font-size: 12px;">Swipe left twice to delete, or tap to edit</p>
+            
+            <div id="shelf-life-select-bar" class="hidden" style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--header-bg);color:white;border-radius:8px;margin-bottom:10px;">
+                <span><span id="shelf-life-selected-count">0</span> selected</span>
+                <div style="display:flex;gap:6px;">
+                    <button class="btn btn-gray" style="padding:5px 10px;font-size:11px;" onclick="selectAllShelfLife()">All</button>
+                    <button class="btn btn-red" style="padding:5px 10px;font-size:11px;" onclick="deleteSelectedShelfLife()">🗑️</button>
+                </div>
+            </div>
+            
+            <div id="shelf-life-list" class="shelf-life-list"></div>
+            <div class="modal-buttons" style="flex-direction: column; gap: 8px;">
+                <button class="btn btn-primary" style="width:100%;" onclick="closeShelfLifeList()">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Shelf Life Modal -->
+    <div id="edit-shelf-life-modal" class="modal">
+        <div class="modal-content">
+            <h2>Edit Shelf Life</h2>
+            <p id="edit-shelf-life-name" style="font-weight: 600; margin-bottom: 15px; text-transform: capitalize;"></p>
+            <div class="form-group">
+                <label>Days until expiry</label>
+                <input type="number" id="edit-shelf-life-days" min="1" placeholder="Days">
+                <div class="quick-dates">
+                    <span class="quick-date" onclick="document.getElementById('edit-shelf-life-days').value=3">3 days</span>
+                    <span class="quick-date" onclick="document.getElementById('edit-shelf-life-days').value=7">1 week</span>
+                    <span class="quick-date" onclick="document.getElementById('edit-shelf-life-days').value=14">2 weeks</span>
+                    <span class="quick-date" onclick="document.getElementById('edit-shelf-life-days').value=30">1 month</span>
+                </div>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-red" onclick="deleteShelfLifeItem()">🗑️ Delete</button>
+                <button class="btn btn-gray" onclick="closeEditShelfLife()">Cancel</button>
+                <button class="btn btn-primary" onclick="updateShelfLifeItem()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allItems = [], editingItem = null, pendingReceiptItems = [], currentPendingIndex = 0;
+        let currentFilter = 'all', collapsedGroups = {}, multiSelectMode = false, selectedItems = new Set();
+        let swipedItem = null, editingShelfLifeItem = null;
+        let shelfLifeSelectMode = false, selectedShelfLifeItems = new Set(), swipedShelfLifeItem = null, shelfLifeData = {};
+
+        if (localStorage.getItem('darkMode') === 'true') document.body.classList.add('dark');
+
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark');
+            localStorage.setItem('darkMode', document.body.classList.contains('dark'));
+        }
+        function showSettings() {
+            document.getElementById('dark-mode-toggle').checked = document.body.classList.contains('dark');
+            document.getElementById('settings-modal').classList.add('active');
+        }
+        function closeSettings() { document.getElementById('settings-modal').classList.remove('active'); }
+
+        function toggleScanOptions() {
+            document.getElementById('scan-options').classList.toggle('active');
+        }
+
+        function toggleMultiSelect() {
+            multiSelectMode = !multiSelectMode;
+            selectedItems.clear();
+            document.body.classList.toggle('multi-select-mode', multiSelectMode);
+            document.getElementById('multi-select-bar').classList.toggle('active', multiSelectMode);
+            document.getElementById('select-btn').style.background = multiSelectMode ? 'rgba(255,255,255,0.4)' : '';
+            document.getElementById('swipe-hint').classList.toggle('hidden', multiSelectMode);
+            updateSelectedCount();
+            renderItems();
+        }
+
+        function toggleItemSelection(name, e) {
+            if (!multiSelectMode) return;
+            e.stopPropagation();
+            if (selectedItems.has(name)) selectedItems.delete(name);
+            else selectedItems.add(name);
+            updateSelectedCount();
+            renderItems();
+        }
+
+        function selectAll() {
+            const filtered = getFilteredItems();
+            if (selectedItems.size === filtered.length) selectedItems.clear();
+            else filtered.forEach(i => selectedItems.add(i.name));
+            updateSelectedCount();
+            renderItems();
+        }
+
+        function updateSelectedCount() {
+            document.getElementById('selected-count').textContent = selectedItems.size;
+        }
+
+        async function deleteSelected() {
+            if (selectedItems.size === 0) return;
+            if (!confirm(`Delete ${selectedItems.size} item(s)?`)) return;
+            for (const name of selectedItems) {
+                await fetch(`/api/items/${encodeURIComponent(name)}`, { method: 'DELETE' });
+            }
+            selectedItems.clear();
+            updateSelectedCount();
+            loadItems();
+        }
+
+        async function showShelfLifeList() {
+            const res = await fetch('/api/shelf-life');
+            shelfLifeData = await res.json();
+            renderShelfLifeList();
+            document.getElementById('shelf-life-list-modal').classList.add('active');
+        }
+        
+        function renderShelfLifeList() {
+            const list = document.getElementById('shelf-life-list');
+            const entries = Object.entries(shelfLifeData);
+            
+            if (entries.length === 0) {
+                list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">No shelf life data yet.<br>Scan a receipt to add!</p>';
+                document.getElementById('shelf-life-select-btn').classList.add('hidden');
+            } else {
+                document.getElementById('shelf-life-select-btn').classList.remove('hidden');
+                list.innerHTML = entries.map(([n, d]) => {
+                    const isSwiped = swipedShelfLifeItem === n;
+                    const isSelected = selectedShelfLifeItems.has(n);
+                    return `<div class="shelf-life-item-wrapper">
+                        <div class="shelf-life-item-delete ${isSwiped ? 'confirm' : ''}" onclick="handleShelfLifeDeleteClick('${n}')">${isSwiped ? 'Confirm' : 'Delete'}</div>
+                        <div class="shelf-life-item ${isSwiped ? 'swiped' : ''}" 
+                            onclick="${shelfLifeSelectMode ? `toggleShelfLifeSelection('${n}')` : `openEditShelfLife('${n}', ${d})`}"
+                            ontouchstart="slTouchStart(event, this, '${n}')" 
+                            ontouchmove="slTouchMove(event, this)" 
+                            ontouchend="slTouchEnd(this, '${n}')">
+                            <div class="checkbox ${isSelected ? 'checked' : ''}"></div>
+                            <span>${n}</span>
+                            <span class="days-badge">${d} days</span>
+                            ${!shelfLifeSelectMode ? '<span class="edit-hint">✏️</span>' : ''}
+                        </div>
+                    </div>`;
+                }).join('');
+            }
+            
+            if (shelfLifeSelectMode) {
+                list.classList.add('shelf-life-select-mode');
+            } else {
+                list.classList.remove('shelf-life-select-mode');
+            }
+        }
+        
+        function closeShelfLifeList() { 
+            document.getElementById('shelf-life-list-modal').classList.remove('active');
+            shelfLifeSelectMode = false;
+            selectedShelfLifeItems.clear();
+            swipedShelfLifeItem = null;
+            document.getElementById('shelf-life-select-bar').classList.add('hidden');
+        }
+        
+        function toggleShelfLifeSelect() {
+            shelfLifeSelectMode = !shelfLifeSelectMode;
+            selectedShelfLifeItems.clear();
+            swipedShelfLifeItem = null;
+            document.getElementById('shelf-life-select-bar').classList.toggle('hidden', !shelfLifeSelectMode);
+            document.getElementById('shelf-life-select-btn').textContent = shelfLifeSelectMode ? '✕ Cancel' : '☑️ Select';
+            updateShelfLifeSelectedCount();
+            renderShelfLifeList();
+        }
+        
+        function toggleShelfLifeSelection(name) {
+            if (selectedShelfLifeItems.has(name)) selectedShelfLifeItems.delete(name);
+            else selectedShelfLifeItems.add(name);
+            updateShelfLifeSelectedCount();
+            renderShelfLifeList();
+        }
+        
+        function selectAllShelfLife() {
+            const entries = Object.keys(shelfLifeData);
+            if (selectedShelfLifeItems.size === entries.length) selectedShelfLifeItems.clear();
+            else entries.forEach(n => selectedShelfLifeItems.add(n));
+            updateShelfLifeSelectedCount();
+            renderShelfLifeList();
+        }
+        
+        function updateShelfLifeSelectedCount() {
+            document.getElementById('shelf-life-selected-count').textContent = selectedShelfLifeItems.size;
+        }
+        
+        async function deleteSelectedShelfLife() {
+            if (selectedShelfLifeItems.size === 0) return;
+            if (!confirm(`Delete ${selectedShelfLifeItems.size} shelf life item(s)?`)) return;
+            for (const name of selectedShelfLifeItems) {
+                await fetch(`/api/shelf-life/${encodeURIComponent(name)}`, { method: 'DELETE' });
+            }
+            selectedShelfLifeItems.clear();
+            updateShelfLifeSelectedCount();
+            showShelfLifeList();
+        }
+        
+        // Swipe handling for shelf life items
+        let slTouchStartX = 0, slTouchCurrentX = 0;
+        function slTouchStart(e, el, name) {
+            if (shelfLifeSelectMode) return;
+            slTouchStartX = e.touches[0].clientX;
+            el.style.transition = 'none';
+        }
+        function slTouchMove(e, el) {
+            if (shelfLifeSelectMode) return;
+            slTouchCurrentX = e.touches[0].clientX;
+            const diff = slTouchStartX - slTouchCurrentX;
+            if (diff > 0 && diff < 80) el.style.transform = `translateX(-${diff}px)`;
+        }
+        function slTouchEnd(el, name) {
+            if (shelfLifeSelectMode) return;
+            el.style.transition = 'transform 0.2s';
+            const diff = slTouchStartX - slTouchCurrentX;
+            
+            if (diff > 40) {
+                if (swipedShelfLifeItem === name) {
+                    deleteShelfLifeItemDirect(name);
+                } else {
+                    swipedShelfLifeItem = name;
+                    renderShelfLifeList();
+                }
+            } else if (diff < -20) {
+                swipedShelfLifeItem = null;
+                renderShelfLifeList();
+            } else {
+                el.style.transform = swipedShelfLifeItem === name ? 'translateX(-70px)' : '';
+            }
+        }
+        
+        function handleShelfLifeDeleteClick(name) {
+            if (swipedShelfLifeItem === name) deleteShelfLifeItemDirect(name);
+            else { swipedShelfLifeItem = name; renderShelfLifeList(); }
+        }
+        
+        async function deleteShelfLifeItemDirect(name) {
+            await fetch(`/api/shelf-life/${encodeURIComponent(name)}`, { method: 'DELETE' });
+            swipedShelfLifeItem = null;
+            showShelfLifeList();
+        }
+        function closeShelfLifeList() { document.getElementById('shelf-life-list-modal').classList.remove('active'); }
+
+        function openEditShelfLife(name, days) {
+            editingShelfLifeItem = name;
+            document.getElementById('edit-shelf-life-name').textContent = name;
+            document.getElementById('edit-shelf-life-days').value = days;
+            document.getElementById('edit-shelf-life-modal').classList.add('active');
+        }
+        function closeEditShelfLife() { 
+            document.getElementById('edit-shelf-life-modal').classList.remove('active'); 
+            editingShelfLifeItem = null;
+        }
+        async function updateShelfLifeItem() {
+            const days = parseInt(document.getElementById('edit-shelf-life-days').value);
+            if (!days || days < 1) { alert('Enter valid days'); return; }
+            await fetch(`/api/shelf-life/${encodeURIComponent(editingShelfLifeItem)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ days })
+            });
+            closeEditShelfLife();
+            showShelfLifeList();
+        }
+        async function deleteShelfLifeItem() {
+            if (!confirm(`Delete shelf life for "${editingShelfLifeItem}"?`)) return;
+            await fetch(`/api/shelf-life/${encodeURIComponent(editingShelfLifeItem)}`, { method: 'DELETE' });
+            closeEditShelfLife();
+            showShelfLifeList();
+        }
+
+        async function loadItems() {
+            try {
+                const res = await fetch('/api/items');
+                allItems = await res.json();
+                renderFilterTabs();
+                renderItems();
+                checkAlerts();
+            } catch (e) { document.getElementById('items-container').innerHTML = '<div class="loading">Error loading</div>'; }
+        }
+
+        function renderFilterTabs() {
+            const counts = { all: allItems.length, expired: 0, today: 0, soon: 0, ok: 0, no_date: 0 };
+            allItems.forEach(i => { if (counts[i.status] !== undefined) counts[i.status]++; });
+            const tabs = [
+                { id: 'all', label: 'All', count: counts.all },
+                { id: 'expired', label: '⛔ Expired', count: counts.expired },
+                { id: 'today', label: '⚠️ Today', count: counts.today },
+                { id: 'soon', label: '⏰ Soon', count: counts.soon },
+                { id: 'ok', label: '✅ Fresh', count: counts.ok },
+                { id: 'no_date', label: '❓ No Date', count: counts.no_date }
+            ];
+            document.getElementById('filter-tabs').innerHTML = tabs.map(t => 
+                `<div class="filter-tab ${currentFilter === t.id ? 'active' : ''}" onclick="setFilter('${t.id}')">${t.label}<span class="count">${t.count}</span></div>`
+            ).join('');
+        }
+
+        function setFilter(f) { currentFilter = f; renderFilterTabs(); renderItems(); }
+        function filterItems() { renderItems(); }
+
+        function getFilteredItems() {
+            let items = allItems;
+            const search = document.getElementById('search-input').value.toLowerCase();
+            if (search) items = items.filter(i => i.name.toLowerCase().includes(search));
+            if (currentFilter !== 'all') items = items.filter(i => i.status === currentFilter);
+            return items;
+        }
+
+        function formatName(n) { return n.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' '); }
+
+        function renderItems() {
+            const container = document.getElementById('items-container');
+            const items = getFilteredItems();
+            if (items.length === 0) {
+                container.innerHTML = `<div class="empty-state"><div class="icon">🧊</div><p>${allItems.length === 0 ? 'Your fridge is empty!' : 'No items match.'}</p></div>`;
+                return;
+            }
+            const groups = { expired: [], today: [], soon: [], ok: [], no_date: [] };
+            items.forEach(i => groups[i.status]?.push(i));
+            const labels = { expired: '⛔ Expired', today: '⚠️ Today', soon: '⏰ Soon', ok: '✅ Fresh', no_date: '❓ No Date' };
+            let html = '<div class="items-list">';
+            for (const [status, list] of Object.entries(groups)) {
+                if (list.length === 0) continue;
+                const collapsed = collapsedGroups[status];
+                html += `<div class="group-header" onclick="toggleGroup('${status}')">${labels[status]} (${list.length})<span class="toggle">${collapsed ? '▶' : '▼'}</span></div>`;
+                if (!collapsed) {
+                    html += list.map(item => {
+                        let statusText = 'No date', daysText = '?';
+                        if (item.days_left !== null) {
+                            if (item.days_left < 0) { statusText = 'EXPIRED'; daysText = '⚠️'; }
+                            else if (item.days_left === 0) { statusText = 'TODAY'; daysText = '⚠️'; }
+                            else { statusText = `${item.days_left}d left`; daysText = item.days_left; }
+                        }
+                        const isSelected = selectedItems.has(item.name);
+                        const isSwiped = swipedItem === item.name;
+                        return `<div class="item-wrapper" id="wrapper-${item.name.replace(/\s/g, '-')}">
+                            <div class="item-delete ${isSwiped ? 'confirm' : ''}" onclick="handleDeleteClick('${item.name}')">${isSwiped ? 'Confirm?' : 'Delete'}</div>
+                            <div class="item ${item.status} ${isSelected ? 'selected' : ''} ${isSwiped ? 'swiped' : ''}" 
+                                onclick="${multiSelectMode ? `toggleItemSelection('${item.name}', event)` : `showEditModal('${item.name}', ${item.quantity || 1}, '${item.expiry_date || ''}')`}"
+                                ontouchstart="touchStart(event, this, '${item.name}')" 
+                                ontouchmove="touchMove(event, this)" 
+                                ontouchend="touchEnd(this, '${item.name}')">
+                                <div class="item-checkbox ${isSelected ? 'checked' : ''}"></div>
+                                <div class="item-info">
+                                    <h3>${formatName(item.name)}<span class="quantity-badge">×${item.quantity || 1}</span></h3>
+                                    <p>${item.expiry_date || 'No expiry'}</p>
+                                </div>
+                                <div class="item-status ${item.status}">
+                                    <div class="days">${daysText}</div>
+                                    <div>${statusText}</div>
+                                </div>
+                            </div>
+                        </div>`;
+                    }).join('');
+                }
+            }
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function toggleGroup(s) { collapsedGroups[s] = !collapsedGroups[s]; renderItems(); }
+
+        let touchStartX = 0, touchCurrentX = 0, touchStartTime = 0;
+        function touchStart(e, el, name) {
+            if (multiSelectMode) return;
+            touchStartX = e.touches[0].clientX;
+            touchStartTime = Date.now();
+            el.style.transition = 'none';
+        }
+        function touchMove(e, el) {
+            if (multiSelectMode) return;
+            touchCurrentX = e.touches[0].clientX;
+            const diff = touchStartX - touchCurrentX;
+            if (diff > 0 && diff < 100) el.style.transform = `translateX(-${diff}px)`;
+        }
+        function touchEnd(el, name) {
+            if (multiSelectMode) return;
+            el.style.transition = 'transform 0.2s';
+            const diff = touchStartX - touchCurrentX;
+            const duration = Date.now() - touchStartTime;
+            
+            if (diff > 50 || (diff > 20 && duration < 200)) {
+                if (swipedItem === name) {
+                    deleteItem(name);
+                } else {
+                    if (swipedItem) resetSwipedItem();
+                    swipedItem = name;
+                    el.classList.add('swiped');
+                }
+            } else if (diff < -30) {
+                swipedItem = null;
+                el.classList.remove('swiped');
+                el.style.transform = '';
+            } else {
+                el.style.transform = swipedItem === name ? 'translateX(-80px)' : '';
+            }
+        }
+
+        function resetSwipedItem() {
+            if (swipedItem) {
+                const el = document.querySelector(`#wrapper-${swipedItem.replace(/\s/g, '-')} .item`);
+                if (el) { el.classList.remove('swiped'); el.style.transform = ''; }
+                swipedItem = null;
+            }
+        }
+
+        function handleDeleteClick(name) {
+            if (swipedItem === name) deleteItem(name);
+            else { resetSwipedItem(); swipedItem = name; renderItems(); }
+        }
+
+        function checkAlerts() {
+            const c = document.getElementById('alert-container');
+            const urgent = allItems.filter(i => i.status === 'expired' || i.status === 'today');
+            if (!urgent.length) { c.innerHTML = ''; return; }
+            c.innerHTML = `<div class="alert"><button class="alert-toggle" onclick="this.parentElement.remove()">✕</button><h3>⚠️ Attention (${urgent.length})</h3><ul>${urgent.slice(0, 5).map(i => `<li><strong>${formatName(i.name)}</strong> ${i.status === 'expired' ? 'EXPIRED!' : 'expires today!'}</li>`).join('')}${urgent.length > 5 ? `<li>...and ${urgent.length - 5} more</li>` : ''}</ul></div>`;
+        }
+
+        function showAddModal() {
+            editingItem = null;
+            document.getElementById('modal-title').textContent = 'Add Item';
+            document.getElementById('item-name').value = '';
+            document.getElementById('item-name').removeAttribute('disabled');
+            document.getElementById('item-quantity').value = 1;
+            document.getElementById('item-expiry').value = '';
+            document.getElementById('delete-btn').classList.add('hidden');
+            document.getElementById('item-modal').classList.add('active');
+        }
+
+        function showEditModal(name, qty, expiry) {
+            if (multiSelectMode) return;
+            editingItem = name;
+            document.getElementById('modal-title').textContent = 'Edit Item';
+            document.getElementById('item-name').value = name;
+            document.getElementById('item-name').removeAttribute('disabled');
+            document.getElementById('item-quantity').value = qty;
+            document.getElementById('item-expiry').value = expiry;
+            document.getElementById('delete-btn').classList.remove('hidden');
+            document.getElementById('item-modal').classList.add('active');
+        }
+
+        function closeModal() { document.getElementById('item-modal').classList.remove('active'); }
+
+        function setQuickDate(days) {
+            const d = new Date(); d.setDate(d.getDate() + days);
+            document.getElementById('item-expiry').value = d.toISOString().split('T')[0];
+        }
+
+        async function saveItem() {
+            const name = document.getElementById('item-name').value.trim();
+            const qty = parseInt(document.getElementById('item-quantity').value) || 1;
+            const expiry = document.getElementById('item-expiry').value || null;
+            if (!name) { alert('Enter item name'); return; }
+            if (editingItem) {
+                // If name changed, delete old and create new
+                if (name !== editingItem) {
+                    await fetch(`/api/items/${encodeURIComponent(editingItem)}`, { method: 'DELETE' });
+                    await fetch('/api/items', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, quantity: qty, expiry_date: expiry }) });
+                } else {
+                    await fetch(`/api/items/${encodeURIComponent(editingItem)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quantity: qty, expiry_date: expiry }) });
+                }
+            } else {
+                await fetch('/api/items', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, quantity: qty, expiry_date: expiry }) });
+            }
+            closeModal(); loadItems();
+        }
+
+        async function deleteCurrentItem() {
+            if (editingItem && confirm(`Delete "${editingItem}"?`)) {
+                await fetch(`/api/items/${encodeURIComponent(editingItem)}`, { method: 'DELETE' });
+                closeModal(); loadItems();
+            }
+        }
+
+        async function deleteItem(name) {
+            await fetch(`/api/items/${encodeURIComponent(name)}`, { method: 'DELETE' });
+            swipedItem = null;
+            loadItems();
+        }
+
+        async function scanImage(input, mode) {
+            if (!input.files[0]) return;
+            document.getElementById('scan-options').classList.remove('active');
+            const formData = new FormData();
+            formData.append('image', input.files[0]);
+            formData.append('mode', mode);
+            document.getElementById('items-container').innerHTML = '<div class="loading">🔍 Analyzing...</div>';
+            try {
+                const res = await fetch('/api/scan', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.error) { alert('Error: ' + data.error); loadItems(); return; }
+                if (mode === 'receipt') { processReceiptItems(data.items); }
+                else {
+                    const existing = allItems.map(i => i.name.toLowerCase());
+                    let added = 0;
+                    for (const name of data.items) {
+                        if (!existing.includes(name.toLowerCase())) {
+                            await fetch('/api/items', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, quantity: 1 }) });
+                            added++;
+                        }
+                    }
+                    alert(`Found ${data.items.length}, added ${added} new!`);
+                    loadItems();
+                }
+            } catch (e) { alert('Scan error'); loadItems(); }
+            input.value = '';
+        }
+
+        async function processReceiptItems(items) {
+            const res = await fetch('/api/process-receipt', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items }) });
+            const data = await res.json();
+            pendingReceiptItems = data.results.filter(r => r.status === 'needs_shelf_life');
+            currentPendingIndex = 0;
+            pendingReceiptItems.length > 0 ? showShelfLifeModal() : (alert('All items added!'), loadItems());
+        }
+
+        function showShelfLifeModal() {
+            if (currentPendingIndex >= pendingReceiptItems.length) { document.getElementById('shelf-life-modal').classList.remove('active'); loadItems(); return; }
+            const item = pendingReceiptItems[currentPendingIndex];
+            document.getElementById('shelf-life-item').textContent = item.name;
+            document.getElementById('shelf-life-days').value = '';
+            document.getElementById('shelf-life-modal').classList.add('active');
+        }
+
+        async function saveShelfLife() {
+            const days = parseInt(document.getElementById('shelf-life-days').value);
+            if (!days || days < 1) { alert('Enter valid days'); return; }
+            const item = pendingReceiptItems[currentPendingIndex];
+            await fetch('/api/shelf-life', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: item.name, days }) });
+            await fetch('/api/process-receipt', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: [{ name: item.name, quantity: item.quantity || 1 }] }) });
+            currentPendingIndex++;
+            showShelfLifeModal();
+        }
+
+        document.addEventListener('click', (e) => {
+            if (swipedItem && !e.target.closest('.item-wrapper')) resetSwipedItem();
+        });
+
+        loadItems();
+        setInterval(loadItems, 30000);
+    </script>
+</body>
+</html>
